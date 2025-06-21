@@ -47,7 +47,10 @@ class EndStreamProcessor(StreamProcessor):
                         event.route_node_state.node_id
                     ]
                 else:
-                    stream_out_end_node_ids = self._get_stream_out_end_node_ids(event)
+                    if event.from_variable_selector[1] == 'plugin_stream_variable':
+                        stream_out_end_node_ids = self._get_stream_out_end_node_ids_for_plugin(event)
+                    else:
+                        stream_out_end_node_ids = self._get_stream_out_end_node_ids(event)
                     self.current_stream_chunk_generating_node_ids[event.route_node_state.node_id] = (
                         stream_out_end_node_ids
                     )
@@ -182,6 +185,20 @@ class EndStreamProcessor(StreamProcessor):
                 if value_selector != stream_output_value_selector:
                     continue
 
+                stream_out_end_node_ids.append(end_node_id)
+
+        return stream_out_end_node_ids
+
+    def _get_stream_out_end_node_ids_for_plugin(self, event: NodeRunStreamChunkEvent) -> list[str]:
+        if not event.from_variable_selector:
+            return []
+
+        stream_output_value_selector = event.from_variable_selector
+        if not stream_output_value_selector:
+            return []
+
+        stream_out_end_node_ids = []
+        for end_node_id, route_position in self.route_position.items():
                 stream_out_end_node_ids.append(end_node_id)
 
         return stream_out_end_node_ids
