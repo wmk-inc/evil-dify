@@ -149,6 +149,18 @@ class EndStreamProcessor(StreamProcessor):
         :param event: queue text chunk event
         :return:
         """
+        stream_out_end_node_ids = []
+
+        if (
+            event.from_variable_selector is not None
+            and len(event.from_variable_selector) > 1
+            and event.from_variable_selector[1] == "plugin_stream_variable"
+        ):
+            for end_node_id, route_position in self.route_position.items():
+                stream_out_end_node_ids.append(end_node_id)
+
+            return stream_out_end_node_ids
+
         if not event.from_variable_selector:
             return []
 
@@ -156,7 +168,6 @@ class EndStreamProcessor(StreamProcessor):
         if not stream_output_value_selector:
             return []
 
-        stream_out_end_node_ids = []
         for end_node_id, route_position in self.route_position.items():
             if end_node_id not in self.rest_node_ids:
                 continue
