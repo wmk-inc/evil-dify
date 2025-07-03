@@ -7,12 +7,8 @@ from uuid import uuid4
 import httpx
 from a2a.client import A2AClient
 from a2a.types import (
-    Message,
     MessageSendParams,
     SendStreamingMessageRequest,
-    Task,
-    TaskState,
-    TaskStatusUpdateEvent,
 )
 from dify_plugin import Tool
 from dify_plugin.entities.tool import ToolInvokeMessage
@@ -42,7 +38,7 @@ file_exts = [
 response_queue: asyncio.Queue = asyncio.Queue()
 
 
-async def run(send_message_payload):
+async def run(send_message_payload, op_names):
     all_responses = []
     async with httpx.AsyncClient() as httpx_client:
         client = await A2AClient.get_client_from_agent_card_url(
@@ -53,24 +49,14 @@ async def run(send_message_payload):
         )
         stream_response = client.send_message_streaming(streaming_request)
         async for chunk in stream_response:
-            event = chunk.root.result
-            is_final_event = (
-                (isinstance(event, TaskStatusUpdateEvent) and event.final)
-                or isinstance(event, Message)
-                or (
-                    isinstance(event, Task)
-                    and event.status.state
-                    in (
-                        TaskState.completed,
-                        TaskState.canceled,
-                        TaskState.failed,
-                        TaskState.rejected,
-                        TaskState.unknown,
-                    )
-                )
-            )
-            if is_final_event:
-                await response_queue.put(chunk.model_dump())
+            data = chunk.model_dump()
+            try:
+                res = data.get("result", {}).get("artifact", {}).get("parts", [])[0].get("data")
+                for key, value in res.items():
+                    if key in op_names:
+                        await response_queue.put(value.get("value"))
+            except Exception as E:
+                pass    
         await response_queue.put(None)
 
     return all_responses
@@ -144,10 +130,14 @@ class agent(Tool):  # noqa: N801
                 "acceptedOutputModes": ["text/plain", "application/json"],
             },
         }
-        asyncio.run(run(send_message_payload))
+        op_name = []
+        for op in out_parameters:
+            op_name.append(op["name"])
+            
+        asyncio.run(run(send_message_payload, op_name))
         steaming = True
         while steaming:
             chunk = asyncio.run(response_queue.get())
             if chunk is None:
                 break
-            yield self.create_json_message(chunk)
+            yield self.create_text_message(str(chunk))
