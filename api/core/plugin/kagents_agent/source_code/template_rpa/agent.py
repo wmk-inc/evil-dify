@@ -1,15 +1,10 @@
-import asyncio
 import os
+import subprocess, json
 from collections.abc import Generator
+
 from typing import Any
 from uuid import uuid4
 
-import httpx
-from a2a.client import A2AClient
-from a2a.types import (
-    MessageSendParams,
-    SendStreamingMessageRequest,
-)
 from dify_plugin import Tool
 from dify_plugin.entities.tool import ToolInvokeMessage
 from ruamel.yaml import YAML
@@ -35,31 +30,6 @@ file_exts = [
     ".xml",
     ".epub",
 ]
-response_queue: asyncio.Queue = asyncio.Queue()
-
-
-async def run(send_message_payload, op_names):
-    all_responses = []
-    async with httpx.AsyncClient() as httpx_client:
-        client = await A2AClient.get_client_from_agent_card_url(
-            httpx_client, "http://192.168.8.41:8889"
-        )
-        streaming_request = SendStreamingMessageRequest(
-            id=uuid4().hex, params=MessageSendParams(**send_message_payload)
-        )
-        stream_response = client.send_message_streaming(streaming_request)
-        async for chunk in stream_response:
-            data = chunk.model_dump()
-            try:
-                res = data.get("result", {}).get("artifact", {}).get("parts", [])[0].get("data")
-                for key, value in res.items():
-                    if key in op_names:
-                        await response_queue.put(value.get("value"))
-            except Exception as E:
-                pass    
-        await response_queue.put(None)
-
-    return all_responses
 
 
 class agent(Tool):  # noqa: N801
@@ -76,7 +46,8 @@ class agent(Tool):  # noqa: N801
         if conf is None:
             yield self.create_text_message("Configuration not found.")
             return
-
+        
+        rpa_a2a_server_url = conf.get("agent_url", "http://192.168.8.41:8889")
         parameters = conf["parameters"]
         out_parameters = conf["out_parameters"]
         flow_id = conf["flow_id"]
@@ -119,7 +90,8 @@ class agent(Tool):  # noqa: N801
             "agent_request_params": {"flow_id": flow_id},
         }
 
-        send_message_payload = {
+        
+        message_payload = {
             "message": {
                 "role": "user",
                 "parts": [{"type": "data", "data": data_payload}],
@@ -130,14 +102,33 @@ class agent(Tool):  # noqa: N801
                 "acceptedOutputModes": ["text/plain", "application/json"],
             },
         }
-        op_name = []
-        for op in out_parameters:
-            op_name.append(op["name"])
-            
-        asyncio.run(run(send_message_payload, op_name))
-        steaming = True
-        while steaming:
-            chunk = asyncio.run(response_queue.get())
-            if chunk is None:
-                break
-            yield self.create_text_message(str(chunk))
+        
+        # call the agent_worker subprocess
+        p = subprocess.Popen(
+            [".venv/bin/python", "./template/agent_worker.py"],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+
+        # send payload
+        payload = json.dumps({
+            "agent_url": rpa_a2a_server_url,
+            "send_message_payload": message_payload
+        })
+        p.stdin.write(payload)
+        p.stdin.close()
+
+        try:
+            for line in p.stdout:
+                try:
+                    chunk = json.loads(line.strip())
+                    yield self.create_stream_variable_message("a2a_streaming_response", str(chunk))
+                except Exception as e:
+                    yield self.create_text_message(f"⚠️ Invalid stream: {e}")
+        finally:
+            p.wait()
+            if p.returncode != 0:
+                err = p.stderr.read()
+                yield self.create_text_message(f"⚠️ Agent crashed: {err}")

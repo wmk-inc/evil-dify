@@ -158,6 +158,8 @@ class PluginGen:
             dist_path = os.path.join(
                 self.cur_agent_file_dir, AGENTS_TOOLS_DIST_PATH.format(index)
             )
+            
+            os.makedirs(os.path.dirname(dist_path), exist_ok=True)
             shutil.copy(path, dist_path)
 
             with open(dist_path, encoding="utf-8") as f:
