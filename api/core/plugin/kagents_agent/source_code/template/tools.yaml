@@ -1,0 +1,50 @@
+identity:
+  name: agent1
+  author: mmk
+  label:
+    # auto-gen
+    zh_Hans: agent 描述
+    en_US: agent description
+  # Unique internal name of the tool
+  # auto-gen
+description:
+  human:
+    # auto-gen
+    zh_Hans: agent 描述
+    en_US: agent description
+  # auto-gen
+  llm:  agent 描述
+parameters:
+#- form: llm
+#  human_description:
+#    # auto-gen
+#    zh_Hans: 入参描述
+#    en_US: input param description
+#  label:
+#    # auto-gen
+#    zh_Hans: 入参描述
+#    en_US: input param description
+#  # auto-gen
+#  llm_description: 入参描述
+#  # auto-gen
+#  name: p0
+#  # auto-gen
+#  required: true
+#  # auto-gen
+#  type: string
+#- form: form
+#  human_description:
+#    zh_Hans: 在响应中包含从 URL 提取的图像列表。
+#  label:
+#    zh_Hans: 包含图像
+#  llm_description: Include images from the URLs in the response. Default is false.
+#  name: include_images
+#  required: false
+#  type: boolean
+#  default: false
+extra:
+  python:
+    # auto-gen
+    source:
+api_key:
+  ''
