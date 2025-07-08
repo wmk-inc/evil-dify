@@ -1,7 +1,7 @@
+import json
 import os
-import subprocess, json
+import subprocess
 from collections.abc import Generator
-
 from typing import Any
 from uuid import uuid4
 
