@@ -1,0 +1,26 @@
+identity:
+  name: agent1
+  author: mmk
+  label:
+    # auto-gen
+    zh_Hans: agent 描述
+    en_US: agent description
+  # Unique internal name of the tool
+  # auto-gen
+description:
+  human:
+    # auto-gen
+    zh_Hans: agent 描述
+    en_US: agent description
+  # auto-gen
+  llm:  agent 描述
+parameters:
+extra:
+  python:
+    # auto-gen
+    source:
+flow_id:
+  ''
+out_parameters:
+
+
