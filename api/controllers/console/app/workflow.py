@@ -150,7 +150,7 @@ class SyncWorkflowApi(Resource):
         """
         parser = reqparse.RequestParser()
         parser.add_argument("conversation_id", type=uuid_value, location="json")
-        parser.add_argument("token", type=str, location="json")
+        parser.add_argument("plan_info", type=list, location="json")
         parser.add_argument("detail", type=list, location="json")
 
         # mandatory filed
@@ -159,13 +159,8 @@ class SyncWorkflowApi(Resource):
         args["icon"] = "😀"
         args["icon_background"] = "#FFEAD5"
         args["name"] = "autoGenAgent " + str(datetime.datetime.now().replace(microsecond=0))
-        chat_history = args["detail"]
-        for chat in chat_history:
-            planer_info = chat.get("result").get("plan_info")
-            if planer_info:
-                break
-        if not planer_info:
-            return {"result": "failed, no plan info founded"}
+        plan_info = args["plan_info"]
+
         try:
             app_service = AppService()
             builtin_service = BuiltinToolManageService()
@@ -182,7 +177,7 @@ class SyncWorkflowApi(Resource):
                 current_user.current_tenant_id,
             )
 
-            for item in planer_info:
+            for item in plan_info:
                 tools_id_from_planer.append(item.get("agentId"))
 
             tool_map = {}

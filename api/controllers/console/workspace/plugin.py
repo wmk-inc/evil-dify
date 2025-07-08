@@ -239,10 +239,11 @@ class PluginInstallFromKagent(Resource):
 
         parser = reqparse.RequestParser()
         parser.add_argument("agent_info", type=list, required=True, location="json")
-        parser.add_argument("type", type=str, required=True, location="json")
         args = parser.parse_args()
+        if len(args["agent_info"]) > 0:
+            agent_type = args["agent_info"][0].get("agentType")
         
-        if args["type"] == "rpa":
+        if agent_type:
             pg = RpaPluginGen(agent_info = args["agent_info"])
         else:    
             pg = PluginGen(agent_info = args["agent_info"])
