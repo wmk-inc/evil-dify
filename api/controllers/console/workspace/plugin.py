@@ -243,7 +243,7 @@ class PluginInstallFromKagent(Resource):
         if len(args["agent_info"]) > 0:
             agent_type = args["agent_info"][0].get("agentType")
         
-        if agent_type:
+        if agent_type == "rpa":
             pg = RpaPluginGen(agent_info = args["agent_info"])
         else:    
             pg = PluginGen(agent_info = args["agent_info"])

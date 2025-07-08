@@ -119,11 +119,21 @@ class agent(Tool):  # noqa: N801
         })
         p.stdin.write(payload)
         p.stdin.close()
-
+        op_names = []
+        for op in out_parameters:
+            op_names.append(op["name"])
+            
         try:
             for line in p.stdout:
                 try:
                     chunk = json.loads(line.strip())
+                    try:
+                        res = chunk.get("result", {}).get("artifact", {}).get("parts", [])[0].get("data")
+                        for key, value in res.items():
+                            if key in op_names:
+                                yield self.create_text_message(value.get("value"))
+                    except Exception as e:
+                        pass 
                     yield self.create_stream_variable_message("a2a_streaming_response", str(chunk))
                 except Exception as e:
                     yield self.create_text_message(f"⚠️ Invalid stream: {e}")

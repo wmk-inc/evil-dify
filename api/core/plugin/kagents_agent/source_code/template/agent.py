@@ -105,6 +105,11 @@ class agent(Tool):  # noqa: N801
             for line in p.stdout:
                 try:
                     chunk = json.loads(line.strip())
+                    if chunk.get("result", {}).get("final") or (
+                                chunk.get("result", {}).get("kind") == "artifact-update"
+                                and chunk.get("result", {}).get("lastChunk")
+                        ):
+                        yield self.create_text_message(str(chunk))
                     yield self.create_stream_variable_message("a2a_streaming_response", str(chunk))
                 except Exception as e:
                     yield self.create_text_message(f"⚠️ Invalid stream: {e}")
