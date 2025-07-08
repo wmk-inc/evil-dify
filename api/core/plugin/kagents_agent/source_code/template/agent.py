@@ -49,6 +49,7 @@ class agent(Tool):  # noqa: N801
 
         parameters = conf["parameters"]
         api_key = conf["api_key"]
+        out_parameters = conf["out_parameters"]
         dify_a2a_server_url = conf.get("agent_url", "http://192.168.8.41:8888")
 
         data_payload = {
@@ -83,7 +84,7 @@ class agent(Tool):  # noqa: N801
                 "acceptedOutputModes": ["text/plain", "application/json"],
             },
         }
-        
+
         # call the agent_worker subprocess
         p = subprocess.Popen(
             [".venv/bin/python", "./template/agent_worker.py"],
@@ -94,23 +95,42 @@ class agent(Tool):  # noqa: N801
         )
 
         # send payload
-        payload = json.dumps({
-            "agent_url": dify_a2a_server_url,
-            "send_message_payload": send_message_payload
-        })
+        payload = json.dumps(
+            {
+                "agent_url": dify_a2a_server_url,
+                "send_message_payload": send_message_payload,
+            }
+        )
         p.stdin.write(payload)
         p.stdin.close()
 
+        op_names = []
+        for op in out_parameters:
+            op_names.append(op["name"])
         try:
             for line in p.stdout:
                 try:
                     chunk = json.loads(line.strip())
                     if chunk.get("result", {}).get("final") or (
-                                chunk.get("result", {}).get("kind") == "artifact-update"
-                                and chunk.get("result", {}).get("lastChunk")
-                        ):
+                        chunk.get("result", {}).get("kind") == "artifact-update"
+                        and chunk.get("result", {}).get("lastChunk")
+                    ):
+                        try:
+                            res = (
+                                chunk.get("result", {})
+                                .get("artifact", {})
+                                .get("parts", [])[0]
+                                .get("data")
+                            )
+                            for key, value in res.items():
+                                if key in op_names:
+                                    yield self.create_text_message(value.get("value"))
+                        except Exception as e:
+                            pass
                         yield self.create_text_message(str(chunk))
-                    yield self.create_stream_variable_message("a2a_streaming_response", str(chunk))
+                    yield self.create_stream_variable_message(
+                        "a2a_streaming_response", str(chunk)
+                    )
                 except Exception as e:
                     yield self.create_text_message(f"⚠️ Invalid stream: {e}")
         finally:

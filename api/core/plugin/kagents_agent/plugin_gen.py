@@ -177,8 +177,11 @@ class PluginGen:
 
             # init
             cur_working_yaml["parameters"] = []
+            cur_working_yaml['out_parameters'] = []
             cur_working_yaml["extra"]["python"]["source"] = []
+            
             parameters = agent_info.get("defaultInputModesList")
+            out_parameters = agent_info.get('defaultOutputModesList')
             if parameters:
                 for parameter in parameters:
                     param_name = parameter.get("name", "none name is founded")
@@ -215,6 +218,19 @@ class PluginGen:
                     cur_working_yaml["parameters"].append(param)
             else:
                 cur_working_yaml["parameters"] = None
+            if out_parameters:
+                for oparameter in out_parameters:
+                    param_name = oparameter.get('name', 'none name is founded')
+                    param_desc = oparameter.get('description', 'none description is founded')
+                    param_req = oparameter.get('required', False)
+                    param_type = oparameter.get('type')
+                    param = {
+                        "name": param_name,
+                        "required": param_req,
+                        "description": param_desc,
+                        "type": param_type
+                    }
+                    cur_working_yaml["out_parameters"].append(param)
             cur_working_yaml["api_key"] = agent_info.get(
                 "apiKey", "none agentTitle is founded"
             )

@@ -166,8 +166,8 @@ class RpaPluginGen:
             # init
             cur_working_yaml['parameters'] = []
             cur_working_yaml['out_parameters'] = []
-
             cur_working_yaml['extra']['python']['source'] = []
+            
             parameters = agent_info.get('defaultInputModesList')
             out_parameters = agent_info.get('defaultOutputModesList')
             if parameters:
@@ -195,6 +195,7 @@ class RpaPluginGen:
                         "type": param_type
                     }
                     cur_working_yaml["parameters"].append(param)
+    
             if out_parameters:
                 for oparameter in out_parameters:
                     param_name = oparameter.get('name', 'none name is founded')
@@ -208,8 +209,6 @@ class RpaPluginGen:
                         "type": param_type
                     }
                     cur_working_yaml["out_parameters"].append(param)
-            else:
-                cur_working_yaml["parameters"] = None
 
             cur_working_yaml['flow_id'] = agent_info.get('flowId', 'none flow_id is founded')
             cur_working_yaml['extra']['python']['source'] = AGENTS_TOOLS_DIST_PATH.format(index)
