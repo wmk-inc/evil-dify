@@ -104,7 +104,7 @@ class agent(Tool):  # noqa: N801
 
         # call the agent_worker subprocess
         p = subprocess.Popen(
-            [".venv/bin/python", "./template/agent_worker.py"],
+            [".venv/bin/python", "./template_rpa/agent_worker.py"],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,

@@ -33,13 +33,15 @@ AGENTS_CLASS_NAME = "agent{}"
 
 PROVIDER_TOOLS_SECTION = "tools"
 
+AGENT_HISTORY_FILE_NAME = "agent_history.txt"
+
 # todo 统一标准
 TYPE_MAPPER = {"text": "string", "file": "string", "string": "string"}
 
 
 def generate_random_plugin_id():
     chars = string.ascii_lowercase + string.digits + "_-"
-    name = ''.join(secrets.choice(chars) for _ in range(secrets.randbelow(11) + 5))
+    name = "".join(secrets.choice(chars) for _ in range(secrets.randbelow(11) + 5))
     return f"{name}"
 
 
@@ -59,6 +61,9 @@ class PluginGen:
 
     def start_tasks(self):
         agent_info = self.agent_info
+
+        self.patch_agent_history(agent_info)
+
         self.generate_difypkg_files()
 
         # details in "https://docs.dify.ai/plugin-dev-en/0211-getting-started-dify-tool"
@@ -67,9 +72,13 @@ class PluginGen:
         self.generate_tools_yaml_files(agent_info)
         self.generate_agent_code_files(agent_info)
 
-        pkg_path = os.path.join(PROJECT_PATH, f"{self.cur_agent_file_dir.split("/")[-1]}.difypkg")
+        pkg_path = os.path.join(
+            PROJECT_PATH, f"{self.cur_agent_file_dir.split("/")[-1]}.difypkg"
+        )
 
-        cli_path = os.path.join(PROJECT_PATH, "core/plugin/kagents_agent/dify-plugin-linux-amd64")
+        cli_path = os.path.join(
+            PROJECT_PATH, "core/plugin/kagents_agent/dify-plugin-linux-amd64"
+        )
 
         subprocess.run(["chmod", "+x", cli_path], check=True)
         subprocess.run(
@@ -80,11 +89,26 @@ class PluginGen:
                 self.cur_agent_file_dir,
             ],
             check=True,
-            )
+        )
         pkg_bytes = b""
         with open(pkg_path, "rb") as f:
             pkg_bytes = f.read()
         return pkg_bytes
+
+    def patch_agent_history(self, agent_info):
+        history = []
+        with open(AGENT_HISTORY_FILE_NAME, "a+") as f:
+            f.seek(0)
+            for line in f:
+                try:
+                    history.append(json.loads(line.strip()))
+                except:
+                    continue
+            for agent in agent_info:
+                f.write(json.dumps(agent) + "\n")
+                history.append(agent)
+        agent_info.clear()
+        agent_info.extend(history)
 
     def generate_difypkg_files(self):
         try:
@@ -105,7 +129,7 @@ class PluginGen:
             with open(path, encoding="utf-8") as f:
                 cur_working_yaml = yaml.load(f)
 
-            cur_working_yaml["name"] = generate_random_plugin_id()
+            cur_working_yaml["name"] = "kagent-agent"
 
             with open(
                 os.path.join(self.cur_agent_file_dir, MANIFEST_DIST_SOURCE_PATH),
@@ -158,7 +182,7 @@ class PluginGen:
             dist_path = os.path.join(
                 self.cur_agent_file_dir, AGENTS_TOOLS_DIST_PATH.format(index)
             )
-            
+
             os.makedirs(os.path.dirname(dist_path), exist_ok=True)
             shutil.copy(path, dist_path)
 
@@ -177,11 +201,11 @@ class PluginGen:
 
             # init
             cur_working_yaml["parameters"] = []
-            cur_working_yaml['out_parameters'] = []
+            cur_working_yaml["out_parameters"] = []
             cur_working_yaml["extra"]["python"]["source"] = []
-            
+
             parameters = agent_info.get("defaultInputModesList")
-            out_parameters = agent_info.get('defaultOutputModesList')
+            out_parameters = agent_info.get("defaultOutputModesList")
             if parameters:
                 for parameter in parameters:
                     param_name = parameter.get("name", "none name is founded")
@@ -220,15 +244,17 @@ class PluginGen:
                 cur_working_yaml["parameters"] = None
             if out_parameters:
                 for oparameter in out_parameters:
-                    param_name = oparameter.get('name', 'none name is founded')
-                    param_desc = oparameter.get('description', 'none description is founded')
-                    param_req = oparameter.get('required', False)
-                    param_type = oparameter.get('type')
+                    param_name = oparameter.get("name", "none name is founded")
+                    param_desc = oparameter.get(
+                        "description", "none description is founded"
+                    )
+                    param_req = oparameter.get("required", False)
+                    param_type = oparameter.get("type")
                     param = {
                         "name": param_name,
                         "required": param_req,
                         "description": param_desc,
-                        "type": param_type
+                        "type": param_type,
                     }
                     cur_working_yaml["out_parameters"].append(param)
             cur_working_yaml["api_key"] = agent_info.get(

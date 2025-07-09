@@ -5,6 +5,7 @@ from flask_login import current_user
 from flask_restful import Resource, reqparse
 from werkzeug.exceptions import Forbidden
 
+from core.plugin.entities.plugin import PluginEntity
 from configs import dify_config
 from controllers.console import api
 from controllers.console.workspace import plugin_permission_required
@@ -242,20 +243,42 @@ class PluginInstallFromKagent(Resource):
         args = parser.parse_args()
         if len(args["agent_info"]) > 0:
             agent_type = args["agent_info"][0].get("agentType")
-        
-        if agent_type == "rpa":
-            pg = RpaPluginGen(agent_info = args["agent_info"])
-        else:    
-            pg = PluginGen(agent_info = args["agent_info"])
-        
-        content = pg.start_tasks()
 
+        if agent_type == "rpa":
+            pg = RpaPluginGen(agent_info=args["agent_info"])
+        else:
+            pg = PluginGen(agent_info=args["agent_info"])
+            
         try:
+            install_id = ""
+            page = 1
+            while not install_id and page < 5:
+                plugins_with_total: list[PluginEntity] = PluginService.list_with_total(
+                    tenant_id, page, 100
+                ).list
+                install_id_name_map = {
+                    item.name: item.installation_id for item in plugins_with_total
+                }
+                install_id = (
+                    install_id_name_map.get("kagent-agent")
+                    if agent_type == "dify"
+                    else install_id_name_map.get("kagent-rpa-agent")
+                )
+                page += 1
+
+            if install_id:
+                _ = PluginService.uninstall(tenant_id, install_id)
+
+            content = pg.start_tasks()
             upload_response = PluginService.upload_pkg(tenant_id, content)
             plugin_unique_identifier = upload_response.unique_identifier
-            install_response = PluginService.install_from_kagent(tenant_id, [plugin_unique_identifier])
-
+            install_response = PluginService.install_from_kagent(
+                tenant_id, [plugin_unique_identifier]
+            )
+            
+        # todo: more exception class
         except Exception as e:
+            _ = PluginService.uninstall(tenant_id, install_id)
             raise ValueError(e)
 
         return jsonable_encoder(install_response)

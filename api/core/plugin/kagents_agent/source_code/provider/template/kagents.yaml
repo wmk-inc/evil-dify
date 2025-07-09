@@ -1,18 +1,18 @@
 #fixed
-credentials_for_provider:
-  agent_api_key:
-    help:
-      en_US: Get your agent API key from kingsware sales
-      zh_Hans: 从金智维销售获取您的 agent API key
-    label:
-      en_US: agent API key
-      zh_Hans: agent API key
-    placeholder:
-      en_US: Please input your agent API key
-      zh_Hans: 请输入你的 agent API key
-    required: true
-    type: secret-input
-    url: https://www.kingsware.cn
+# credentials_for_provider:
+#   agent_api_key:
+#     help:
+#       en_US: Get your agent API key from kingsware sales
+#       zh_Hans: 从金智维销售获取您的 agent API key
+#     label:
+#       en_US: agent API key
+#       zh_Hans: agent API key
+#     placeholder:
+#       en_US: Please input your agent API key
+#       zh_Hans: 请输入你的 agent API key
+#     required: true
+#     type: secret-input
+#     url: https://www.kingsware.cn
 extra:
   python:
     source: provider/kagents.py

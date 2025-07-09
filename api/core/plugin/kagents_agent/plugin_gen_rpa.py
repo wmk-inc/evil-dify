@@ -33,13 +33,15 @@ AGENTS_CLASS_NAME = "agent{}"
 
 PROVIDER_TOOLS_SECTION = "tools"
 
+AGENT_HISTORY_FILE_NAME = "rpa_agent_history.txt"
+
 # todo 统一标准
 TYPE_MAPPER = {"text": "string", "file": "string", "string": "string"}
 
 
 def generate_random_plugin_id():
     chars = string.ascii_lowercase + string.digits + "_-"
-    name = ''.join(secrets.choice(chars) for _ in range(secrets.randbelow(11) + 5))
+    name = "".join(secrets.choice(chars) for _ in range(secrets.randbelow(11) + 5))
     return f"{name}"
 
 
@@ -59,6 +61,9 @@ class RpaPluginGen:
 
     def start_tasks(self):
         agent_info = self.agent_info
+
+        self.patch_agent_history(agent_info)
+
         self.generate_difypkg_files()
 
         # details in "https://docs.dify.ai/plugin-dev-en/0211-getting-started-dify-tool"
@@ -67,9 +72,13 @@ class RpaPluginGen:
         self.generate_tools_yaml_files(agent_info)
         self.generate_agent_code_files(agent_info)
 
-        pkg_path = os.path.join(PROJECT_PATH, f"{self.cur_agent_file_dir.split("/")[-1]}.difypkg")
+        pkg_path = os.path.join(
+            PROJECT_PATH, f"{self.cur_agent_file_dir.split("/")[-1]}.difypkg"
+        )
 
-        cli_path = os.path.join(PROJECT_PATH, "core/plugin/kagents_agent/dify-plugin-linux-amd64")
+        cli_path = os.path.join(
+            PROJECT_PATH, "core/plugin/kagents_agent/dify-plugin-linux-amd64"
+        )
 
         subprocess.run(["chmod", "+x", cli_path], check=True)
         subprocess.run(
@@ -80,12 +89,27 @@ class RpaPluginGen:
                 self.cur_agent_file_dir,
             ],
             check=True,
-            )
-        
+        )
+
         pkg_bytes = b""
         with open(pkg_path, "rb") as f:
             pkg_bytes = f.read()
         return pkg_bytes
+
+    def patch_agent_history(self, agent_info):
+        history = []
+        with open(AGENT_HISTORY_FILE_NAME, "a+") as f:
+            f.seek(0)
+            for line in f:
+                try:
+                    history.append(json.loads(line.strip()))
+                except:
+                    continue
+            for agent in agent_info:
+                f.write(json.dumps(agent) + "\n")
+                history.append(agent)
+        agent_info.clear()
+        agent_info.extend(history)
 
     def generate_difypkg_files(self):
         try:
@@ -106,7 +130,7 @@ class RpaPluginGen:
             with open(path, encoding="utf-8") as f:
                 cur_working_yaml = yaml.load(f)
 
-            cur_working_yaml["name"] = generate_random_plugin_id()
+            cur_working_yaml["name"] = "kagent-rpa-agent"
 
             with open(
                 os.path.join(self.cur_agent_file_dir, MANIFEST_DIST_SOURCE_PATH),
@@ -126,96 +150,123 @@ class RpaPluginGen:
             with open(path, encoding="utf-8") as f:
                 cur_working_yaml = yaml.load(f)
 
-            if PROVIDER_TOOLS_SECTION not in cur_working_yaml or cur_working_yaml[PROVIDER_TOOLS_SECTION] is None:
+            if (
+                PROVIDER_TOOLS_SECTION not in cur_working_yaml
+                or cur_working_yaml[PROVIDER_TOOLS_SECTION] is None
+            ):
                 cur_working_yaml[PROVIDER_TOOLS_SECTION] = []
 
             for index, _ in enumerate(agent_infos):
-                cur_working_yaml[PROVIDER_TOOLS_SECTION].append(AGENTS_TOOLS_DIST_PATH.format(index))
+                cur_working_yaml[PROVIDER_TOOLS_SECTION].append(
+                    AGENTS_TOOLS_DIST_PATH.format(index)
+                )
 
-            with open(os.path.join(self.cur_agent_file_dir, AGENTS_DIST_SOURCE_PATH), "w", encoding="utf-8") as f:
+            with open(
+                os.path.join(self.cur_agent_file_dir, AGENTS_DIST_SOURCE_PATH),
+                "w",
+                encoding="utf-8",
+            ) as f:
                 yaml.dump(cur_working_yaml, f)
 
         except Exception as e:
             print(e)
 
-
     def generate_tools_yaml_files(self, agent_infos):
         for index, agent_info in enumerate(agent_infos):
-            agent_title = agent_info.get('agentTitle', 'none agentTitle is founded')
-            agent_description = agent_info.get('agentDescription', 'none agent description is founded')
-            agent_id = agent_info.get('agentId', 'none agent description is founded')
+            agent_title = agent_info.get("agentTitle", "none agentTitle is founded")
+            agent_description = agent_info.get(
+                "agentDescription", "none agent description is founded"
+            )
+            agent_id = agent_info.get("agentId", "none agent description is founded")
 
             path = os.path.join(self.cur_agent_file_dir, AGENTS_TOOLS_SOURCE_PATH)
-            dist_path = os.path.join(self.cur_agent_file_dir, AGENTS_TOOLS_DIST_PATH.format(index))
-            
+            dist_path = os.path.join(
+                self.cur_agent_file_dir, AGENTS_TOOLS_DIST_PATH.format(index)
+            )
+
             os.makedirs(os.path.dirname(dist_path), exist_ok=True)
             shutil.copy(path, dist_path)
 
             with open(dist_path, encoding="utf-8") as f:
                 cur_working_yaml = yaml.load(f)
 
-            cur_working_yaml['identity']['zh_Hans'] = agent_title
-            cur_working_yaml['identity']['name'] = agent_id
-            cur_working_yaml['identity']['label']['zh_Hans'] = agent_description
-            cur_working_yaml['identity']['label']['en_US'] = pinyin.get(agent_description, format="strip",
-                                                                        delimiter=" ")
+            cur_working_yaml["identity"]["zh_Hans"] = agent_title
+            cur_working_yaml["identity"]["name"] = agent_id
+            cur_working_yaml["identity"]["label"]["zh_Hans"] = agent_description
+            cur_working_yaml["identity"]["label"]["en_US"] = pinyin.get(
+                agent_description, format="strip", delimiter=" "
+            )
 
-            cur_working_yaml['description']['human']['zh_Hans'] = agent_description
-            cur_working_yaml['description']['llm'] = agent_description
+            cur_working_yaml["description"]["human"]["zh_Hans"] = agent_description
+            cur_working_yaml["description"]["llm"] = agent_description
 
             # init
-            cur_working_yaml['parameters'] = []
-            cur_working_yaml['out_parameters'] = []
-            cur_working_yaml['extra']['python']['source'] = []
-            
-            parameters = agent_info.get('defaultInputModesList')
-            out_parameters = agent_info.get('defaultOutputModesList')
+            cur_working_yaml["parameters"] = []
+            cur_working_yaml["out_parameters"] = []
+            cur_working_yaml["extra"]["python"]["source"] = []
+
+            parameters = agent_info.get("defaultInputModesList")
+            out_parameters = agent_info.get("defaultOutputModesList")
             if parameters:
                 for parameter in parameters:
-                    param_name = parameter.get('name', 'none name is founded')
-                    param_desc = parameter.get('description', 'none description is founded')
-                    param_req = parameter.get('required', False)
-                    param_type = TYPE_MAPPER[parameter.get('type')]
+                    param_name = parameter.get("name", "none name is founded")
+                    param_desc = parameter.get(
+                        "description", "none description is founded"
+                    )
+                    param_req = parameter.get("required", False)
+                    param_type = TYPE_MAPPER[parameter.get("type")]
 
                     # todo: support "form": "form"
                     param = {
-                        "name": pinyin.get(param_name, format="strip", delimiter="") if bool(
-                            re.search(r'[\u4e00-\u9fff]', param_name)) else param_name,
+                        "name": (
+                            pinyin.get(param_name, format="strip", delimiter="")
+                            if bool(re.search(r"[\u4e00-\u9fff]", param_name))
+                            else param_name
+                        ),
                         "form": "llm",
                         "human_description": {
                             "zh_Hans": param_desc,
-                            "en_US": pinyin.get(param_desc, format="strip", delimiter=" ")
+                            "en_US": pinyin.get(
+                                param_desc, format="strip", delimiter=" "
+                            ),
                         },
                         "label": {
                             "zh_Hans": param_desc,
-                            "en_US": pinyin.get(param_desc, format="strip", delimiter=" ")
+                            "en_US": pinyin.get(
+                                param_desc, format="strip", delimiter=" "
+                            ),
                         },
                         "llm_description": param_desc,
                         "required": param_req,
-                        "type": param_type
+                        "type": param_type,
                     }
                     cur_working_yaml["parameters"].append(param)
-    
+
             if out_parameters:
                 for oparameter in out_parameters:
-                    param_name = oparameter.get('name', 'none name is founded')
-                    param_desc = oparameter.get('description', 'none description is founded')
-                    param_req = oparameter.get('required', False)
-                    param_type = oparameter.get('type')
+                    param_name = oparameter.get("name", "none name is founded")
+                    param_desc = oparameter.get(
+                        "description", "none description is founded"
+                    )
+                    param_req = oparameter.get("required", False)
+                    param_type = oparameter.get("type")
                     param = {
                         "name": param_name,
                         "required": param_req,
                         "description": param_desc,
-                        "type": param_type
+                        "type": param_type,
                     }
                     cur_working_yaml["out_parameters"].append(param)
 
-            cur_working_yaml['flow_id'] = agent_info.get('flowId', 'none flow_id is founded')
-            cur_working_yaml['extra']['python']['source'] = AGENTS_TOOLS_DIST_PATH.format(index)
+            cur_working_yaml["flow_id"] = agent_info.get(
+                "flowId", "none flow_id is founded"
+            )
+            cur_working_yaml["extra"]["python"]["source"] = (
+                AGENTS_TOOLS_DIST_PATH.format(index)
+            )
 
             with open(dist_path, "w", encoding="utf-8") as f:
                 yaml.dump(cur_working_yaml, f)
-
 
     def generate_agent_code_files(self, agent_info):
         path = os.path.join(self.cur_agent_file_dir, AGENTS_AGENT_SOURCE_PATH)
