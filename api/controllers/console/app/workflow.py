@@ -148,17 +148,20 @@ class SyncWorkflowApi(Resource):
         """
         Sync workflow from kagents
         """
+        auto_gen_name = str(datetime.datetime.now().replace(microsecond=0))
         parser = reqparse.RequestParser()
-        parser.add_argument("conversation_id", type=uuid_value, location="json")
+        parser.add_argument("name", type=str, location="json", default=auto_gen_name)
+        parser.add_argument("description", type=str, location="json", default="no desc")
         parser.add_argument("plan_info", type=list, location="json")
-        parser.add_argument("detail", type=list, location="json")
+        parser.add_argument("conversation_id", type=uuid_value, location="json")
+        
 
         # mandatory filed
         args = parser.parse_args()
         args["mode"] = "workflow"
         args["icon"] = "😀"
         args["icon_background"] = "#FFEAD5"
-        args["name"] = "autoGenAgent " + str(datetime.datetime.now().replace(microsecond=0))
+        args["name"] = args["name"]
         plan_info = args["plan_info"]
 
         try:
