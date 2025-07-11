@@ -36,7 +36,7 @@ PROVIDER_TOOLS_SECTION = "tools"
 AGENT_HISTORY_FILE_NAME = "agent_history.txt"
 
 # todo 统一标准
-TYPE_MAPPER = {"text": "string", "file": "string", "string": "string"}
+TYPE_MAPPER = {"text": "string", "file": "string", "string": "string", "select": "string"}
 
 
 def generate_random_plugin_id():
@@ -213,7 +213,7 @@ class PluginGen:
                         "description", "none description is founded"
                     )
                     param_req = parameter.get("required", False)
-                    param_type = TYPE_MAPPER[parameter.get("type")]
+                    param_type = TYPE_MAPPER.get(parameter.get("type"), "string")
 
                     # todo: support "form": "form"
                     param = {
