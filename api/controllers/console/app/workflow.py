@@ -1,3 +1,4 @@
+import datetime
 import json
 import logging
 from typing import cast
@@ -15,11 +16,12 @@ from controllers.console.app.error import (
     DraftWorkflowNotExist,
     DraftWorkflowNotSync,
 )
-from controllers.console.app.wraps import get_app_model
+from controllers.console.app.wraps import get_app_model, get_tenant_id
 from controllers.console.wraps import account_initialization_required, setup_required
 from controllers.web.error import InvokeRateLimitError as InvokeRateLimitHttpError
 from core.app.apps.base_app_queue_manager import AppQueueManager
 from core.app.entities.app_invoke_entities import InvokeFrom
+from core.tools.entities.api_entities import ToolApiEntity, ToolProviderApiEntity
 from extensions.ext_database import db
 from factories import variable_factory
 from fields.workflow_fields import workflow_fields, workflow_pagination_fields
@@ -29,10 +31,12 @@ from libs.helper import TimestampField, uuid_value
 from libs.login import current_user, login_required
 from models import App
 from models.account import Account
-from models.model import AppMode
+from models.model import ApiToken, AppMode
 from services.app_generate_service import AppGenerateService
+from services.app_service import AppService
 from services.errors.app import WorkflowHashNotEqualError
 from services.errors.llm import InvokeRateLimitError
+from services.tools.builtin_tools_manage_service import BuiltinToolManageService
 from services.workflow_service import DraftWorkflowDeletionError, WorkflowInUseError, WorkflowService
 
 logger = logging.getLogger(__name__)
@@ -136,6 +140,110 @@ class DraftWorkflowApi(Resource):
             "hash": workflow.unique_hash,
             "updated_at": TimestampField().format(workflow.updated_at or workflow.created_at),
         }
+
+
+class SyncWorkflowApi(Resource):
+    @get_tenant_id
+    def post(self, tenant_id):
+        """
+        Sync workflow from kagents
+        """
+        auto_gen_name = str(datetime.datetime.now().replace(microsecond=0))
+        parser = reqparse.RequestParser()
+        parser.add_argument("name", type=str, location="json", default=auto_gen_name)
+        parser.add_argument("description", type=str, location="json", default="no desc")
+        parser.add_argument("plan_info", type=list, location="json")
+        parser.add_argument("conversation_id", type=uuid_value, location="json")
+        
+
+        # mandatory filed
+        args = parser.parse_args()
+        args["mode"] = "workflow"
+        args["icon"] = "😀"
+        args["icon_background"] = "#FFEAD5"
+        args["name"] = args["name"]
+        plan_info = args["plan_info"]
+
+        try:
+            app_service = AppService()
+            builtin_service = BuiltinToolManageService()
+            workflow_service = WorkflowService()
+
+            app_model = app_service.create_app(tenant_id, args, current_user)
+
+            tools_to_use: list[ToolApiEntity] = []
+            providers_to_use: list[ToolProviderApiEntity] = []
+            tools_id_from_planer: list[str] = []
+
+            installed_tools_list: list[ToolProviderApiEntity] = builtin_service.list_builtin_tools(
+                current_user.id,
+                current_user.current_tenant_id,
+            )
+
+            for item in plan_info:
+                tools_id_from_planer.append(item.get("agentId"))
+
+            tool_map = {}
+            for tools_with_provider in installed_tools_list:
+                for tool in tools_with_provider.tools:
+                    if tool.name in tools_id_from_planer:
+                        tool_map[tool.name] = (tool, tools_with_provider)
+
+            tools_to_use = []
+            providers_to_use = []
+            for tool_id in tools_id_from_planer:
+                if tool_id in tool_map:
+                    tool, provider = tool_map[tool_id]
+                    tools_to_use.append(tool)
+                    providers_to_use.append(provider)
+            draft = workflow_service.generate_kagents_workflow(tools_to_use, providers_to_use)
+
+            workflow = workflow_service.sync_draft_workflow(
+                app_model=app_model,
+                graph=draft,
+                features={"retriever_resource": {"enabled": True}},
+                unique_hash="",
+                account=current_user,
+                environment_variables=[],
+                conversation_variables=[],
+            )
+
+            with Session(db.engine) as session:
+                workflow = workflow_service.publish_workflow(
+                    session=session,
+                    app_model=app_model,
+                    account=current_user,
+                    marked_name="",
+                    marked_comment="",
+                )
+
+                app_model.workflow_id = workflow.id
+                db.session.commit()
+
+            workflow_created_at = TimestampField().format(workflow.created_at)
+
+            session.commit()
+
+            key = ApiToken.generate_api_key("app-", 24)
+            api_token = ApiToken()
+            api_token.app_id = app_model.workflow_id
+            api_token.tenant_id = current_user.current_tenant_id
+            api_token.token = key
+            api_token.type = "app"
+            db.session.add(api_token)
+            db.session.commit()
+
+            return {
+                "result": "success",
+                "api_key": key,
+                "workflow_id": app_model.workflow_id,
+                "workflow_created_at": workflow_created_at,
+                "workflow_name": args["name"],
+            }
+
+        except Exception:
+            logging.exception("Unhandled exception")
+            raise InternalServerError()
 
 
 class AdvancedChatDraftWorkflowRunApi(Resource):
@@ -731,6 +839,10 @@ class WorkflowByIdApi(Resource):
         return None, 204
 
 
+api.add_resource(
+    SyncWorkflowApi,
+    "/apps/workflows/sync",
+)
 api.add_resource(
     DraftWorkflowApi,
     "/apps/<uuid:app_id>/workflows/draft",

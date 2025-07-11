@@ -292,6 +292,16 @@ class PluginService:
         return manager.upload_bundle(tenant_id, bundle, verify_signature)
 
     @staticmethod
+    def install_from_kagent(tenant_id: str, plugin_unique_identifiers: Sequence[str]):
+        manager = PluginInstaller()
+        return manager.install_from_identifiers(
+            tenant_id,
+            plugin_unique_identifiers,
+            PluginInstallationSource.Package,
+            [{}],
+        )
+
+    @staticmethod
     def install_from_local_pkg(tenant_id: str, plugin_unique_identifiers: Sequence[str]):
         manager = PluginInstaller()
         return manager.install_from_identifiers(

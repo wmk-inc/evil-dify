@@ -5,12 +5,15 @@ from flask_login import current_user
 from flask_restful import Resource, reqparse
 from werkzeug.exceptions import Forbidden
 
+from core.plugin.entities.plugin import PluginEntity
 from configs import dify_config
 from controllers.console import api
 from controllers.console.workspace import plugin_permission_required
 from controllers.console.wraps import account_initialization_required, setup_required
 from core.model_runtime.utils.encoders import jsonable_encoder
 from core.plugin.impl.exc import PluginDaemonClientSideError
+from core.plugin.kagents_agent.plugin_gen import PluginGen
+from core.plugin.kagents_agent.plugin_gen_rpa import RpaPluginGen
 from libs.login import login_required
 from models.account import TenantPluginPermission
 from services.plugin.plugin_permission_service import PluginPermissionService
@@ -227,6 +230,58 @@ class PluginInstallFromGithubApi(Resource):
 
         return jsonable_encoder(response)
 
+class PluginInstallFromKagent(Resource):
+    @setup_required
+    @login_required
+    @account_initialization_required
+    @plugin_permission_required(install_required=True)
+    def post(self):
+        tenant_id = current_user.current_tenant_id
+
+        parser = reqparse.RequestParser()
+        parser.add_argument("agent_info", type=list, required=True, location="json")
+        args = parser.parse_args()
+        if len(args["agent_info"]) > 0:
+            agent_type = args["agent_info"][0].get("agentType")
+
+        if agent_type == "rpa":
+            pg = RpaPluginGen(agent_info=args["agent_info"])
+        else:
+            pg = PluginGen(agent_info=args["agent_info"])
+            
+        try:
+            install_id = ""
+            page = 1
+            while not install_id and page < 5:
+                plugins_with_total: list[PluginEntity] = PluginService.list_with_total(
+                    tenant_id, page, 100
+                ).list
+                install_id_name_map = {
+                    item.name: item.installation_id for item in plugins_with_total
+                }
+                install_id = (
+                    install_id_name_map.get("kagent-agent")
+                    if agent_type == "dify"
+                    else install_id_name_map.get("kagent-rpa-agent")
+                )
+                page += 1
+
+            if install_id:
+                _ = PluginService.uninstall(tenant_id, install_id)
+
+            content = pg.start_tasks()
+            upload_response = PluginService.upload_pkg(tenant_id, content)
+            plugin_unique_identifier = upload_response.unique_identifier
+            install_response = PluginService.install_from_kagent(
+                tenant_id, [plugin_unique_identifier]
+            )
+            
+        # todo: more exception class
+        except Exception as e:
+            _ = PluginService.uninstall(tenant_id, install_id)
+            raise ValueError(e)
+
+        return jsonable_encoder(install_response)
 
 class PluginInstallFromMarketplaceApi(Resource):
     @setup_required
@@ -506,6 +561,7 @@ api.add_resource(PluginUploadFromPkgApi, "/workspaces/current/plugin/upload/pkg"
 api.add_resource(PluginUploadFromGithubApi, "/workspaces/current/plugin/upload/github")
 api.add_resource(PluginUploadFromBundleApi, "/workspaces/current/plugin/upload/bundle")
 api.add_resource(PluginInstallFromPkgApi, "/workspaces/current/plugin/install/pkg")
+api.add_resource(PluginInstallFromKagent, "/workspaces/current/plugin/install/kagents")
 api.add_resource(PluginInstallFromGithubApi, "/workspaces/current/plugin/install/github")
 api.add_resource(PluginUpgradeFromMarketplaceApi, "/workspaces/current/plugin/upgrade/marketplace")
 api.add_resource(PluginUpgradeFromGithubApi, "/workspaces/current/plugin/upgrade/github")
